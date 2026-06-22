@@ -11,6 +11,10 @@
         select, input, button { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; box-sizing: border-box; }
         button { background-color: #4CAF50; color: white; border: none; font-weight: bold; cursor: pointer; }
         button:active { background-color: #45a049; }
+        /* 선생님 상태 표시 스타일 */
+        #teacher-status-box { margin: 5px 0 15px; padding: 10px; border-radius: 6px; font-weight: bold; display: none; font-size: 15px; }
+        .status-available { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+        .status-absent { background-color: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
     </style>
 </head>
 <body>
@@ -23,12 +27,12 @@
         
         <select id="classNum">
             <option value="">-- 반 선택 --</option>
-            <script>for(let i=1; i<=10; i++) document.write(`<option value="${i}">${i}반</option>`);</script>
+            <script>for(let i=1; i<=12; i++) document.write(`<option value="${i}">${i}반</option>`);</script>
         </select>
         
         <input type="text" id="name" placeholder="이름을 입력하세요" autocomplete="off">
         
-        <select id="teacher">
+        <select id="teacher" onchange="checkTeacherStatus()">
             <option value="">-- 선생님 선택 --</option>
             <option value="김건우 선생님(국어)">김건우 선생님(국어)</option>
             <option value="김영민 선생님(사회)">김영민 선생님(사회)</option>
@@ -42,6 +46,8 @@
             <option value="최아현 선생님(지구)">최아현 선생님(지구)</option>
             <option value="홍지연 선생님(영어)">홍지연 선생님(영어)</option>
         </select>
+
+        <div id="teacher-status-box"></div>
         
         <select id="purpose">
             <option value="">-- 방문 목적 --</option>
@@ -56,8 +62,43 @@
     </div>
 
     <script>
-        // ⚠️ 아래 주소를 구글 앱스 스크립트(GAS) 배포 후 얻은 웹 앱 URL로 꼭 바꿔주세요!
-        const GAS_URL = "https://script.google.com/macros/s/AKfycby52rviqnyQuPq67s4meAT5bUL8KYMhfHZXtLAC0qhyFez-TIVN_pE81tYWpVpem21AKw/exec";
+        const GAS_URL = "여기에_새로_복사한_GAS_웹_앱_URL을_붙여넣으세요";
+        let teacherStatuses = {}; // 전체 선생님 상태 저장용
+
+        // 주기적으로 선생님들 상태 원격으로 가져오기
+        async function loadStatuses() {
+            try {
+                const response = await fetch(GAS_URL);
+                const data = await response.json();
+                teacherStatuses = data.statuses || {};
+                checkTeacherStatus(); // 현재 선택된 선생님 상태 갱신
+            } catch(e) { console.error("상태 로드 실패", e); }
+        }
+
+        // 선생님 선택 시 상태 보여주기
+        function checkTeacherStatus() {
+            const teacherSelect = document.getElementById('teacher');
+            const statusBox = document.getElementById('teacher-status-box');
+            const selectedTeacher = teacherSelect.value;
+
+            if(!selectedTeacher) {
+                statusBox.style.display = "none";
+                return;
+            }
+
+            // 기본값은 '자리에 계심'으로 처리 (설정 안 한 경우)
+            const status = teacherStatuses[selectedTeacher] || "자리에 계심"; 
+            statusBox.style.display = "block";
+            statusBox.className = ""; // 클래스 초기화
+
+            if(status === "자리에 계심") {
+                statusBox.innerText = `🟢 현재 해당 선생님은 [자리에 계심] 상태입니다.`;
+                statusBox.classList.add('status-available');
+            } else {
+                statusBox.innerText = `🔴 현재 해당 선생님은 [자리에 안 계심(부재중)] 상태입니다.`;
+                statusBox.classList.add('status-absent');
+            }
+        }
 
         async function submitCall() {
             const grade = document.getElementById('grade').value;
@@ -74,23 +115,22 @@
             const data = { action: "call", grade, classNum, name, teacher, purpose };
 
             try {
-                const response = await fetch(GAS_URL, {
-                    method: "POST",
-                    body: JSON.stringify(data)
-                });
+                const response = await fetch(GAS_URL, { method: "POST", body: JSON.stringify(data) });
                 const result = await response.json();
                 if(result.result === "success") {
-                    alert("호출이 완료되었습니다. 교무실 앞에서 잠시 기다려주세요.");
+                    alert("호출이 완료되었습니다.");
                     document.getElementById('name').value = "";
                     document.getElementById('classNum').selectedIndex = 0;
                     document.getElementById('teacher').selectedIndex = 0;
                     document.getElementById('purpose').selectedIndex = 0;
+                    statusBox.style.display = "none";
                 }
-            } catch(error) {
-                alert("호출에 실패했습니다. 다시 시도해주세요.");
-                console.error(error);
-            }
+            } catch(error) { alert("호출 실패!"); }
         }
+
+        // 5초마다 실시간으로 선생님들의 상태를 체크해옴
+        setInterval(loadStatuses, 5000);
+        loadStatuses();
     </script>
 </body>
 </html>
