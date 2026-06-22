@@ -58,24 +58,23 @@
             <option value="기타">기타</option>
         </select>
         
-        <button onclick="submitCall()">호출하기</button>
+        <button id="callBtn" onclick="submitCall()">호출하기</button>
     </div>
 
     <script>
         const GAS_URL = "https://script.google.com/macros/s/AKfycbw8BaJanpoGK2PVy4b8D-MYtWAYPkdXgMuiSCNuvJaHfuW02r0EBD2u2EpA34w4y9THfQ/exec";
-        let teacherStatuses = {}; // 전체 선생님 상태 저장용
+        let teacherStatuses = {}; 
+        let isCalling = false; // 중복 호출 방지용 변수 추가
 
-        // 주기적으로 선생님들 상태 원격으로 가져오기
         async function loadStatuses() {
             try {
                 const response = await fetch(GAS_URL);
                 const data = await response.json();
                 teacherStatuses = data.statuses || {};
-                checkTeacherStatus(); // 현재 선택된 선생님 상태 갱신
+                checkTeacherStatus(); 
             } catch(e) { console.error("상태 로드 실패", e); }
         }
 
-        // 선생님 선택 시 상태 보여주기
         function checkTeacherStatus() {
             const teacherSelect = document.getElementById('teacher');
             const statusBox = document.getElementById('teacher-status-box');
@@ -86,10 +85,9 @@
                 return;
             }
 
-            // 기본값은 '자리에 계심'으로 처리 (설정 안 한 경우)
             const status = teacherStatuses[selectedTeacher] || "자리에 계심"; 
             statusBox.style.display = "block";
-            statusBox.className = ""; // 클래스 초기화
+            statusBox.className = ""; 
 
             if(status === "자리에 계심") {
                 statusBox.innerText = `🟢 현재 해당 선생님은 [자리에 계심] 상태입니다.`;
@@ -101,6 +99,9 @@
         }
 
         async function submitCall() {
+            // 1. 이미 호출 중이면 무시 (버튼 연타 방지)
+            if (isCalling) return;
+
             const grade = document.getElementById('grade').value;
             const classNum = document.getElementById('classNum').value;
             const name = document.getElementById('name').value.trim();
@@ -112,23 +113,41 @@
                 return;
             }
 
+            // 2. 호출 시작: 상태 잠그고 버튼 텍스트 변경
+            isCalling = true;
+            const callBtn = document.getElementById('callBtn');
+            callBtn.innerText = "호출 중...";
+            callBtn.style.backgroundColor = "#999"; // 시각적으로 눌린 느낌 주기
+
             const data = { action: "call", grade, classNum, name, teacher, purpose };
 
             try {
                 const response = await fetch(GAS_URL, { method: "POST", body: JSON.stringify(data) });
                 const result = await response.json();
+                
                 if(result.result === "success") {
                     alert("호출이 완료되었습니다.");
                     document.getElementById('name').value = "";
                     document.getElementById('classNum').selectedIndex = 0;
                     document.getElementById('teacher').selectedIndex = 0;
                     document.getElementById('purpose').selectedIndex = 0;
-                    statusBox.style.display = "none";
+                    
+                    // 🚨 에러 원인 수정 완료: 직접 id로 찾아서 숨김
+                    document.getElementById('teacher-status-box').style.display = "none"; 
+                } else {
+                    alert("서버에서 오류가 발생했습니다.");
                 }
-            } catch(error) { alert("호출 실패!"); }
+            } catch(error) { 
+                console.error(error); // 진짜 에러가 났을 때 F12에서 확인하기 위해
+                alert("호출 실패! 네트워크를 확인해주세요."); 
+            } finally {
+                // 3. 호출이 끝나면(성공이든 실패든) 다시 원래대로 복구
+                isCalling = false;
+                callBtn.innerText = "호출하기";
+                callBtn.style.backgroundColor = "#4CAF50";
+            }
         }
 
-        // 5초마다 실시간으로 선생님들의 상태를 체크해옴
         setInterval(loadStatuses, 5000);
         loadStatuses();
     </script>
