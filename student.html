@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3학년 교무실 호출 시스템</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; text-align: center; background-color: #f4f6f9; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { color: #333; }
+        select, input, button { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; border: none; font-weight: bold; cursor: pointer; }
+        button:active { background-color: #45a049; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🔔 3학년 교무실 호출</h2>
+        
+        <select id="grade">
+            <option value="3">3학년</option>
+        </select>
+        
+        <select id="classNum">
+            <option value="">-- 반 선택 --</option>
+            <script>for(let i=1; i<=10; i++) document.write(`<option value="${i}">${i}반</option>`);</script>
+        </select>
+        
+        <input type="text" id="name" placeholder="이름을 입력하세요" autocomplete="off">
+        
+        <select id="teacher">
+            <option value="">-- 선생님 선택 --</option>
+            <option value="김건우 선생님(국어)">김건우 선생님(국어)</option>
+            <option value="김영민 선생님(사회)">김영민 선생님(사회)</option>
+            <option value="강만규 선생님(물리)">강만규 선생님(물리)</option>
+            <option value="노여진 선생님(국어)">노여진 선생님(국어)</option>
+            <option value="박기만 선생님(사회)">박기만 선생님(사회)</option>
+            <option value="이의진 선생님(체육)">이의진 선생님(체육)</option>
+            <option value="이주영 선생님(화학)">이주영 선생님(화학)</option>
+            <option value="이필권 선생님(미술)">이필권 선생님(미술)</option>
+            <option value="채정태 선생님(수학)">채정태 선생님(수학)</option>
+            <option value="최아현 선생님(지구)">최아현 선생님(지구)</option>
+            <option value="홍지연 선생님(영어)">홍지연 선생님(영어)</option>
+        </select>
+        
+        <select id="purpose">
+            <option value="">-- 방문 목적 --</option>
+            <option value="핸드폰">핸드폰 관련</option>
+            <option value="수행평가">수행평가</option>
+            <option value="질문">질문</option>
+            <option value="출결">출결 관련</option>
+            <option value="기타">기타</option>
+        </select>
+        
+        <button onclick="submitCall()">호출하기</button>
+    </div>
+
+    <script>
+        // ⚠️ 아래 주소를 구글 앱스 스크립트(GAS) 배포 후 얻은 웹 앱 URL로 꼭 바꿔주세요!
+        const GAS_URL = "https://script.google.com/macros/s/AKfycby52rviqnyQuPq67s4meAT5bUL8KYMhfHZXtLAC0qhyFez-TIVN_pE81tYWpVpem21AKw/exec";
+
+        async function submitCall() {
+            const grade = document.getElementById('grade').value;
+            const classNum = document.getElementById('classNum').value;
+            const name = document.getElementById('name').value.trim();
+            const teacher = document.getElementById('teacher').value;
+            const purpose = document.getElementById('purpose').value;
+
+            if(!classNum || !name || !teacher || !purpose) {
+                alert("모든 항목을 입력/선택해주세요!");
+                return;
+            }
+
+            const data = { action: "call", grade, classNum, name, teacher, purpose };
+
+            try {
+                const response = await fetch(GAS_URL, {
+                    method: "POST",
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if(result.result === "success") {
+                    alert("호출이 완료되었습니다. 교무실 앞에서 잠시 기다려주세요.");
+                    document.getElementById('name').value = "";
+                    document.getElementById('classNum').selectedIndex = 0;
+                    document.getElementById('teacher').selectedIndex = 0;
+                    document.getElementById('purpose').selectedIndex = 0;
+                }
+            } catch(error) {
+                alert("호출에 실패했습니다. 다시 시도해주세요.");
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>
