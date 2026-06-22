@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>교무실 호출 현황 모니터</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #2c3e50; color: #ecf0f1; margin: 0; padding: 20px; }
+        header { text-align: center; margin-bottom: 20px; }
+        h1 { margin: 0 0 10px; font-size: 28px; }
+        #status { font-size: 14px; color: #bdc3c7; margin-bottom: 15px; }
+        
+        /* 선생님 상태 관리 패널 스타일 */
+        .status-panel { background: #34495e; padding: 15px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        .status-panel h2 { margin-top: 0; font-size: 18px; color: #f1c40f; border-bottom: 1px solid #555; padding-bottom: 5px;}
+        .teacher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+        .teacher-row { display: flex; justify-content: space-between; align-items: center; background: #2c3e50; padding: 8px 12px; border-radius: 5px; font-size: 14px; }
+        .status-select { background: #34495e; color: white; border: 1px solid #7f8c8d; border-radius: 4px; padding: 3px; font-size: 13px; }
+        
+        /* 대기 명단 카드 스타일 */
+        .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+        .card { background-color: #34495e; border-radius: 10px; width: 300px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-left: 5px solid #e74c3c; }
+        .card-header { font-weight: bold; font-size: 18px; color: #f1c40f; margin-bottom: 10px; border-bottom: 1px solid #7f8c8d; padding-bottom: 5px; }
+        .card-body p { margin: 8px 0; font-size: 16px; }
+        .card-body .purpose { color: #e74c3c; font-weight: bold; }
+        .btn-complete { display: block; width: 100%; padding: 10px; background-color: #2ecc71; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .btn-complete:hover { background-color: #27ae60; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🔔 실시간 대기 현황</h1>
+        <div id="status">시스템 연결 중...</div>
+    </header>
+
+    <div class="status-panel">
+        <h2>👥 선생님 재실/부재 설정 (바꾸면 밖에 바로 반영됨)</h2>
+        <div class="teacher-grid" id="teacher-status-grid">
+            </div>
+    </div>
+
+    <hr style="border: 0; height: 1px; background: #555; margin-bottom: 30px;">
+
+    <div class="container" id="call-list">
+        </div>
+
+    <script>
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbw8BaJanpoGK2PVy4b8D-MYtWAYPkdXgMuiSCNuvJaHfuW02r0EBD2u2EpA34w4y9THfQ/exec";
+        const teachers = [
+            "김건우 선생님(국어)", "김영민 선생님(사회)", "강만규 선생님(물리)", "노여진 선생님(국어)", 
+            "박기만 선생님(사회)", "이의진 선생님(체육)", "이주영 선생님(화학)", "이필권 선생님(미술)", 
+            "채정태 선생님(수학)", "최아현 선생님(지구)", "홍지연 선생님(영어)"
+        ];
+
+        let lastCallIdSet = new Set();
+        let isVoiceActive = false;
+
+        // 화면 켜질 때 선생님들 상태 변경 창 생성하기
+        function initTeacherGrid() {
+            const grid = document.getElementById('teacher-status-grid');
+            teachers.forEach(t => {
+                const row = document.createElement('div');
+                row.className = 'teacher-row';
+                row.innerHTML = `
+                    <span>${t.split(' ')[0]}</span>
+                    <select class="status-select" id="status-${t}" onchange="changeStatus('${t}')">
+                        <option value="자리에 계심">자리에 계심</option>
+                        <option value="부재중">부재중</option>
+                    </select>
+                `;
+                grid.appendChild(row);
+            });
+        }
+
+        // 선생님이 상태를 바꾸면 구글 서버로 전송
+        async function changeStatus(teacherName) {
+            const selectBox = document.getElementById(`status-${teacherName}`);
+            const newStatus = selectBox.value;
+            try {
+                await fetch(GAS_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "updateStatus", teacher: teacherName, status: newStatus })
+                });
+            } catch(e) { alert("상태 변경 저장 실패!"); }
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window && isVoiceActive) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR'; utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        async function fetchCalls() {
+            const statusDiv = document.getElementById('status');
+            const listContainer = document.getElementById('call-list');
+            
+            try {
+                const response = await fetch(GAS_URL);
+                const data = await response.json();
+                const calls = data.calls || [];
+                const statuses = data.statuses || {};
+                
+                statusDiv.innerText = `마지막 업데이트: ${new Date().toLocaleTimeString()} (대기: ${calls.length}명)`;
+                
+                // 현재 원격에 저장된 선생님들 상태를 교사용 화면 드롭다운에도 동기화 (다른 사람이 바꿨을 수도 있으니)
+                teachers.forEach(t => {
+                    const selectBox = document.getElementById(`status-${t}`);
+                    if(selectBox && statuses[t]) {
+                        // 사용자가 지금 누르고 있는 상태가 아닐 때만 동기화
+                        if(document.activeElement !== selectBox) selectBox.value = statuses[t];
+                    }
+                });
+
+                listContainer.innerHTML = "";
+                if (calls.length === 0) {
+                    listContainer.innerHTML = "<p style='text-align:center; color:#95a5a6; width:100%;'>현재 대기 중인 호출이 없습니다.</p>";
+                    lastCallIdSet.clear();
+                    return;
+                }
+
+                const currentIds = new Set(calls.map(call => call.id));
+                const newIds = calls.filter(call => !lastCallIdSet.has(call.id));
+
+                if (newIds.length > 0 && isVoiceActive) {
+                    newIds.forEach(call => {
+                        const voiceMessage = `${call.teacher.split(' ')[0]} 선생님, ${call.grade}학년 ${call.classNum}반 ${call.name} 학생이 ${call.purpose} 건으로 방문했습니다.`;
+                        speak(voiceMessage);
+                    });
+                }
+                lastCallIdSet = currentIds;
+
+                calls.forEach(call => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.id = `card-${call.id}`;
+                    card.innerHTML = `
+                        <div class="card-header">📍 ${call.teacher}</div>
+                        <div class="card-body">
+                            <p><b>학생:</b> ${call.grade}학년 ${call.classNum}반 ${call.name}</p>
+                            <p><b>목적:</b> <span class="purpose">${call.purpose}</span></p>
+                        </div>
+                        <button class="btn-complete" onclick="completeCall('${call.id}')">처리 완료</button>
+                    `;
+                    listContainer.appendChild(card);
+                });
+            } catch (error) { console.error(error); }
+        }
+
+        async function completeCall(id) {
+            try {
+                await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "complete", id: id }) });
+                fetchCalls();
+            } catch (error) { alert("완료 처리 실패"); }
+        }
+
+        window.addEventListener('click', () => {
+            if (!isVoiceActive) {
+                isVoiceActive = true;
+                speak("음성 안내 시스템이 활성화되었습니다.");
+            }
+        }, { once: true });
+
+        // 시작
+        initTeacherGrid();
+        setTimeout(() => { fetchCalls(); setInterval(fetchCalls, 6000); }, 500);
+    </script>
+</body>
+</html>
